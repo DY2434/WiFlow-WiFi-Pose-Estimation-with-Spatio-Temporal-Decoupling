@@ -12,7 +12,7 @@ Existing WiFi-based human pose estimation methods often focus on discrete pose s
 
 ## Architecture
 
-![Architecture](architecture.jpg)
+![Architecture](pic/architecture.jpg)
 
 ---
 
@@ -77,24 +77,19 @@ Trained models are automatically evaluated on the test set after training. Resul
 
 ### Comparison with Ground Truth
 
-<table>
-    <tr>
-        <td align="center"><img src="ture.gif" width="400"></td>
-    </tr>
-    <tr>
-        <td align="center"><img src="visualization.gif" width="400"></td>
-    </tr>
-</table>
+<div align="center">
+  <img src="pic/comparison_vertical.gif" width="400">
+</div>
 
 ### Training Curves
 
-![Training History](training_history.png)
+![Training History](pic/training_history.png)
 
 ---
 
 ### Visual comparison of OpenPose (top) and WiFlow (bottom) results
 
-![Visual comparison](fig.png)
+![Visual comparison](pic/fig.png)
 
 ## Result
 
