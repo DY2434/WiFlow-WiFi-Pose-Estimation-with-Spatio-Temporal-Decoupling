@@ -115,6 +115,9 @@ Trained models are automatically evaluated on the test set after training. Resul
 | Replace TCN and Asymmetric Convolution with 2D residual convolution | 83.55%  | 95.69%  |
 | Remove Dual Axial Attention | 86.59%  | 96.43%  |
 
+## Reference
+Yi Dao*, Lankai Zhang*, Hao Liu*, Haiwei Zhang and Wenbo Wang, “WiFlow: A Lightweight WiFi-based Continuous Human Pose Estimation Network with Spatio-Temporal Feature Decoupling,” arxiv preprint arxiv:2602.08661, 2026
+
 ## License
 
 [Apache License 2.0]
