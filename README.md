@@ -8,13 +8,28 @@ Existing WiFi-based human pose estimation methods often focus on discrete pose s
 * [Visualization](#visualization)
 * [Result](#result)
 
----
-
 ## Architecture
 
 ![Architecture](pic/architecture.jpg)
 
----
+### Model Parameters
+
+| Block | Output size | Parameters |
+|---|---|---|
+| Input | 540 × 20 | - |
+| TCN Layer 1 | 540 × 20 | [1 × 540] × 2, dilation=1 |
+| TCN Layer 2 | 440 × 20 | [1 × 440] × 2, dilation=2 |
+| TCN Layer 3 | 340 × 20 | [1 × 340] × 2, dilation=4 |
+| TCN Layer 4 | 240 × 20 | [1 × 240] × 2, dilation=8 |
+| ConvBlock1 (up) | 8 × 20 × 240 | [1 × 3, 8] × 3 |
+| ResBlock 1 | 8 × 20 × 120 | [1 × 3, 8] × 3, stride=(1,2) |
+| ResBlock 2 | 16 × 20 × 60 | [1 × 3, 16] × 3, stride=(1,2) |
+| ResBlock 3 | 32 × 20 × 30 | [1 × 3, 32] × 3, stride=(1,2) |
+| ResBlock 4 | 64 × 20 × 15 | [1 × 3, 64] × 3, stride=(1,2) |
+| AxialAttention | 64 × 15 × 20 | Groups=8, Layer=1 |
+| Decoder | 2 × 15 × 20 | [3 × 3, 32], [1 × 1, 2] |
+| Avg Pooling | 2 × 15 × 1 | - |
+| Output | 15 × 2 | - |
 
 ## Dataset
 
@@ -26,8 +41,6 @@ Existing WiFi-based human pose estimation methods often focus on discrete pose s
 - Activities: walking, raising hands, squatting, hands up, kicking, waving, turning, and jumping
 - Keypoints: 15 body joints
 - CSI Dimensions: 540 × 20
-
----
 
 ## Usage
 
@@ -233,6 +246,21 @@ Trained models are automatically evaluated on the test set after training. Resul
 | Replace TCN and Asym Conv with 2D res conv | 83.55% | 95.69% |
 | Replace group conv with depthwise conv | 87.31% | 96.84% |
 | Remove Axial Attention | 91.09% | 97.07% |
+
+## Citation
+
+If you find our work or dataset useful in your research, please consider citing our paper:
+
+```bibtex
+@misc{dao2026wiflowlightweightwifibasedcontinuous,
+      title={WiFlow: A Lightweight WiFi-based Continuous Human Pose Estimation Network with Spatio-Temporal Feature Decoupling}, 
+      author={Yi Dao and Lankai Zhang and Hao Liu and Haiwei Zhang and Wenbo Wang},
+      year={2026},
+      eprint={2602.08661},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={[https://arxiv.org/abs/2602.08661](https://arxiv.org/abs/2602.08661)}, 
+}
 
 ## Acknowledgements
 
