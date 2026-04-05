@@ -214,7 +214,7 @@ Trained models are automatically evaluated on the test set after training. Resul
 
 *(Note: WiFlow was evaluated via 5-fold cross-validation. Baselines were evaluated on the most challenging Subject 3 due to high computational costs.)*
 
-### Cross-Dataset Performance (MM-Fi Dataset)
+### Cross-Dataset Performance ([MM-Fi Dataset](https://github.com/ybhbingo/MMFi_dataset))
 
 | Method | PCK@20 | PCK@30 | PCK@40 | PCK@50 | MPJPE (m) | Param (M) |
 |---|---|---|---|---|---|---|
@@ -233,6 +233,13 @@ Trained models are automatically evaluated on the test set after training. Resul
 | Replace TCN and Asym Conv with 2D res conv | 83.55% | 95.69% |
 | Replace group conv with depthwise conv | 87.31% | 96.84% |
 | Remove Axial Attention | 91.09% | 97.07% |
+
+## Acknowledgements
+
+This project involves comparisons with several excellent open-source datasets and baseline models. We express our gratitude to the authors for releasing their code and data:
+* **MM-Fi Dataset**: [https://github.com/ybhbingo/MMFi_dataset](https://github.com/ybhbingo/MMFi_dataset)
+* **WPformer**: [https://github.com/pridy999/metafi_pose_estimation](https://github.com/pridy999/metafi_pose_estimation)
+* **HPE-Li**: [https://github.com/Toandinh1/HPE-Li-ECCV2024.git](https://github.com/Toandinh1/HPE-Li-ECCV2024.git)
 
 ## License
 
