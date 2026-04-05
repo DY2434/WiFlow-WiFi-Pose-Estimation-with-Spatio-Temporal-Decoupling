@@ -9,16 +9,13 @@ from models.attention import DualAxialAttention
 class WiFlowPoseModel(nn.Module):
     """WiFlow姿态估计完整模型"""
 
-    def __init__(self, dropout=0.5):
+    def __init__(self, dropout=0.3):
         super().__init__()
-
-        # 输入维度缩减
-        # self.reduce = nn.Linear(540, 480)
 
         # 时序卷积网络
         self.tcn = TemporalConvNet(
             num_inputs=540,
-            num_channels=[540, 360, 240],
+            num_channels=[540, 440, 360, 240],
             kernel_size=3,
             dropout=dropout
         )
@@ -73,11 +70,6 @@ class WiFlowPoseModel(nn.Module):
     def forward(self, x):
         # 输入: [batch_size, 540, 20]
         batch_size = x.size(0)
-
-        # 维度缩减
-        # x = x.transpose(1, 2)  # [B, 20, 540]
-        # x = self.reduce(x)  # [B, 20, 480]
-        # x = x.transpose(1, 2)  # [B, 480, 20]
 
         # TCN编码
         x = self.tcn(x)  # [B, 240, 20]
