@@ -11,7 +11,6 @@ from config import Config
 from train import train_pose_model
 from dataset import PreprocessedCSIKeypointsDataset, create_preprocessed_train_val_test_loaders
 
-# 警告过滤器通常保留，因为它们设置了环境
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", message=".*torch.cuda.amp.autocast.*")
@@ -109,7 +108,6 @@ def main():
 
     # 训练参数
     n_epochs = args.epochs
-    # 改成3-5比较好，在epoch15之后过拟合精度下降
     patience = 5
     lr = args.lr
     weight_decay = 1e-5
@@ -123,7 +121,6 @@ def main():
     print(f"输出目录: {output_dir}")
 
     try:
-        # 修复：正确接收所有返回值
         model, history, test_loss, test_pck, test_mpe, pck_details = train_pose_model(
             train_loader=train_loader,
             val_loader=val_loader,
