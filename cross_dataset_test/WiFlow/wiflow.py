@@ -153,7 +153,6 @@ class ConvBlock1D(nn.Module):
         return x
 
 class Chomp1d(nn.Module):
-    """裁剪模块，用于因果卷积"""
     def __init__(self, chomp_size):
         super(Chomp1d, self).__init__()
         self.chomp_size = chomp_size
@@ -161,180 +160,30 @@ class Chomp1d(nn.Module):
     def forward(self, x):
         return x[:, :, :-self.chomp_size].contiguous()
 
-
-# ============================== #
-# SE注意力机制 (推荐用于TCN)
-# ============================== #
-class SEBlock1D(nn.Module):
-    """
-    1D Squeeze-and-Excitation Block
-    适用于时间序列数据，关注通道重要性
-    """
-
-    def __init__(self, channels, reduction=16):
-        super(SEBlock1D, self).__init__()
-        self.squeeze = nn.AdaptiveAvgPool1d(1)  # 全局平均池化
-        self.excitation = nn.Sequential(
-            nn.Linear(channels, channels // reduction, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Linear(channels // reduction, channels, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        # x: [batch_size, channels, time_steps]
-        batch_size, channels, _ = x.size()
-
-        # Squeeze: 全局平均池化 [B, C, T] -> [B, C, 1]
-        squeeze = self.squeeze(x).view(batch_size, channels)
-
-        # Excitation: 学习通道权重 [B, C] -> [B, C]
-        excitation = self.excitation(squeeze).view(batch_size, channels, 1)
-
-        # 重新加权
-        return x * excitation
-
-
-# ============================== #
-# CBAM注意力机制 (功能更全面)
-# ============================== #
-class ChannelAttention1D(nn.Module):
-    """1D通道注意力"""
-
-    def __init__(self, channels, reduction=16):
-        super(ChannelAttention1D, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool1d(1)
-        self.max_pool = nn.AdaptiveMaxPool1d(1)
-
-        self.fc = nn.Sequential(
-            nn.Linear(channels, channels // reduction, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Linear(channels // reduction, channels, bias=False)
-        )
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        batch_size, channels, _ = x.size()
-
-        # 平均池化和最大池化
-        avg_out = self.fc(self.avg_pool(x).view(batch_size, channels))
-        max_out = self.fc(self.max_pool(x).view(batch_size, channels))
-
-        # 融合并激活
-        out = self.sigmoid(avg_out + max_out).view(batch_size, channels, 1)
-        return x * out
-
-
-class SpatialAttention1D(nn.Module):
-    """1D空间(时间)注意力"""
-
-    def __init__(self, kernel_size=7):
-        super(SpatialAttention1D, self).__init__()
-        self.conv = nn.Conv1d(2, 1, kernel_size=kernel_size,
-                              padding=kernel_size // 2, bias=False)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        # 沿通道维度计算统计量
-        avg_out = torch.mean(x, dim=1, keepdim=True)  # [B, 1, T]
-        max_out, _ = torch.max(x, dim=1, keepdim=True)  # [B, 1, T]
-
-        # 拼接并卷积
-        attention = torch.cat([avg_out, max_out], dim=1)  # [B, 2, T]
-        attention = self.conv(attention)  # [B, 1, T]
-        attention = self.sigmoid(attention)
-
-        return x * attention
-
-
-class CBAM1D(nn.Module):
-    """1D CBAM: 通道注意力 + 空间注意力"""
-
-    def __init__(self, channels, reduction=16, kernel_size=7):
-        super(CBAM1D, self).__init__()
-        self.channel_attention = ChannelAttention1D(channels, reduction)
-        self.spatial_attention = SpatialAttention1D(kernel_size)
-
-    def forward(self, x):
-        x = self.channel_attention(x)  # 先通道注意力
-        x = self.spatial_attention(x)  # 再空间注意力
-        return x
-
-
-# ============================== #
-# 集成注意力的TCN组件
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-
-# 因果卷积截断层 (保留你原版的因果特性)
-class Chomp1d(nn.Module):
-    def __init__(self, chomp_size):
-        super(Chomp1d, self).__init__()
-        self.chomp_size = chomp_size
-
-    def forward(self, x):
-        return x[:, :, :-self.chomp_size].contiguous()
-
-
-# =====================================================================
-# 1. 内层基础块：替换原先笨重的 Conv1d，改为极速 Depthwise + Pointwise
-# =====================================================================
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-
-# 因果卷积截断层 (保持原版时序因果性)
-class Chomp1d(nn.Module):
-    def __init__(self, chomp_size):
-        super(Chomp1d, self).__init__()
-        self.chomp_size = chomp_size
-
-    def forward(self, x):
-        return x[:, :, :-self.chomp_size].contiguous()
-
-
-# =====================================================================
-# 核心杀器：ResNeXt 风格的分组融合块
-# 完美兼顾了：局部时空相干性 (保 PCK@10) + 1x1全局视野 + 轻量化
-# =====================================================================
 class InnerGroupedTemporalBlock(nn.Module):
-    """
-    终极防爆版 ResNeXt 1D 块
-    加入了严格的组内 BN 归一化，彻底根除 Eval 阶段的方差崩溃！
-    """
-
     def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2, attention_type='none'):
         super(InnerGroupedTemporalBlock, self).__init__()
 
         self.groups = 18
 
-        # ==========================================================
-        # 第一层大循环：分组提取 -> 归一化镇压 -> 全局打通 -> 归一化
-        # ==========================================================
         self.conv1_group = nn.Conv1d(n_inputs, n_inputs, kernel_size,
                                      stride=stride, padding=padding, dilation=dilation,
                                      groups=self.groups, bias=False)
         self.chomp1 = Chomp1d(padding) if padding > 0 else nn.Identity()
-        self.bn1_group = nn.BatchNorm1d(n_inputs)  # 新增：镇压组内洪流
-        self.relu1_group = nn.SiLU(inplace=True)  # 新增：非线性提炼
+        self.bn1_group = nn.BatchNorm1d(n_inputs)
+        self.relu1_group = nn.SiLU(inplace=True)
 
         self.conv1_pw = nn.Conv1d(n_inputs, n_outputs, 1, bias=False)
         self.bn1_pw = nn.BatchNorm1d(n_outputs)
         self.relu1_pw = nn.SiLU(inplace=True)
         self.dropout1 = nn.Dropout(dropout)
 
-        # ==========================================================
-        # 第二层大循环：深化时空特征
-        # ==========================================================
         self.conv2_group = nn.Conv1d(n_outputs, n_outputs, kernel_size,
                                      stride=1, padding=padding, dilation=dilation,
                                      groups=self.groups, bias=False)
         self.chomp2 = Chomp1d(padding) if padding > 0 else nn.Identity()
-        self.bn2_group = nn.BatchNorm1d(n_outputs)  # 新增：镇压组内洪流
-        self.relu2_group = nn.SiLU(inplace=True)  # 新增：非线性提炼
+        self.bn2_group = nn.BatchNorm1d(n_outputs)
+        self.relu2_group = nn.SiLU(inplace=True)
 
         self.conv2_pw = nn.Conv1d(n_outputs, n_outputs, 1, bias=False)
         self.bn2_pw = nn.BatchNorm1d(n_outputs)
@@ -372,15 +221,7 @@ class InnerGroupedTemporalBlock(nn.Module):
 
         return F.silu(out + res)
 
-
-# =====================================================================
-# 外层封装块：完美对接外部的调用 (一字不改)
-# =====================================================================
 class TemporalBlock(nn.Module):
-    """
-    TCN 网络的外壳包装器
-    """
-
     def __init__(self, num_inputs, num_channels, kernel_size=3, dropout=0.2, attention_type='none'):
         super(TemporalBlock, self).__init__()
         layers = []
@@ -597,45 +438,6 @@ class DualAxialAttention(nn.Module):
 
         return x
 
-
-class SEBlock2D(nn.Module):
-    """
-    2D Squeeze-and-Excitation Block
-    适用于2D特征图：[batch, channels, height, width]
-    """
-
-    def __init__(self, channels, reduction=16):
-        super(SEBlock2D, self).__init__()
-
-        # 全局平均池化：[B, C, H, W] -> [B, C, 1, 1]
-        self.global_avg_pool = nn.AdaptiveAvgPool2d(1)
-
-        # SE网络：学习通道重要性
-        self.se_net = nn.Sequential(
-            nn.Linear(channels, channels // reduction, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Linear(channels // reduction, channels, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        # x: [batch, channels, height, width]
-        batch_size, channels, height, width = x.size()
-
-        # 1. 全局平均池化
-        squeeze = self.global_avg_pool(x)  # [B, C, 1, 1]
-        squeeze = squeeze.view(batch_size, channels)  # [B, C]
-
-        # 2. 学习通道权重
-        excitation = self.se_net(squeeze)  # [B, C]
-        excitation = excitation.view(batch_size, channels, 1, 1)  # [B, C, 1, 1]
-
-        # 3. 重新加权
-        output = x * excitation  # 广播乘法
-
-        return output
-
-
 class CSIPoseEstimationModel(nn.Module):
     def __init__(self, dropout=0.3):
         super(CSIPoseEstimationModel, self).__init__()
@@ -645,7 +447,7 @@ class CSIPoseEstimationModel(nn.Module):
             num_channels=[342, 306, 288],
             kernel_size=3,
             dropout=dropout,
-            attention_type='none'  # 'se', 'cbam', 'none'
+            attention_type='none'
         )
 
         self.tcn_proj = nn.Sequential(
@@ -696,7 +498,7 @@ class CSIPoseEstimationModel(nn.Module):
         time_steps = x.size(3)  # 10
 
         # ========================================== #
-        # 核心转换：展平维度 [B, 3, 114, 10] -> [B, 342, 10]
+        #  [B, 3, 114, 10] -> [B, 342, 10]
         # ========================================== #
         x = x.reshape(batch_size, -1, time_steps)
 
@@ -718,7 +520,6 @@ class CSIPoseEstimationModel(nn.Module):
         x = self.att(x)
 
         # ===== decoder =====
-        # 直接提取因果卷积最后一步的特征，消除动作残影！
         x = x[..., -1:]
 
         x = self.final_conv(x)  # [B, 3, 17, 1]
@@ -806,13 +607,10 @@ class SimplePoseLoss(nn.Module):
 # ============================== #
 # 评估函数
 # ============================== #
-# ============================== #
-# 评估函数 (修复为根节点对齐标准)
-# ============================== #
 def percentage_correct_keypoints(pred, target, thresholds=[0.1, 0.2, 0.3, 0.4, 0.5], num_kpts_type=None):
     batch_size = pred.shape[0]
 
-    # �� 核心修复：根节点 (Pelvis, 索引0) 对齐！消除全局偏移误差！
+    # 根节点 (Pelvis, 索引0) 对齐，消除全局偏移误差。
     pred_rel = pred - pred[:, 0:1, :]
     target_rel = target - target[:, 0:1, :]
 
@@ -835,7 +633,7 @@ def percentage_correct_keypoints(pred, target, thresholds=[0.1, 0.2, 0.3, 0.4, 0
 
 
 def mean_keypoint_error(pred, target):
-    # �� 同样需要根节点对齐！
+    # 根节点对齐
     pred_rel = pred - pred[:, 0:1, :]
     target_rel = target - target[:, 0:1, :]
 
@@ -1730,7 +1528,7 @@ def train_pose_model(train_loader, val_loader, test_loader,
             print(f"  验证pck未改善，耐心计数: {patience_counter}/{patience}")
 
         # ============================== #
-        # 新增：每个 Epoch 结束后保存一次断点
+        # 每个 Epoch 结束后保存一次断点
         # ============================== #
         torch.save({
             'epoch': epoch,
