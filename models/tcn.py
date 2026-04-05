@@ -2,137 +2,80 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class AsymmetricConvBlock(nn.Module):
-    """非对称卷积残差块（仅在子载波维度卷积）"""
-
-    def __init__(self, in_channels, out_channels, dropout=0.3):
-        super().__init__()
-
-        self.block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=(1, 3),
-                      stride=(1, 2), padding=(0, 1)),
-            nn.BatchNorm2d(out_channels),
-            nn.SiLU(inplace=True),
-            nn.Dropout2d(dropout),
-
-            nn.Conv2d(out_channels, out_channels, kernel_size=(1, 3), padding=(0, 1)),
-            nn.BatchNorm2d(out_channels),
-            nn.SiLU(inplace=True),
-            nn.Dropout2d(dropout),
-
-            nn.Conv2d(out_channels, out_channels, kernel_size=(1, 3), padding=(0, 1)),
-            nn.BatchNorm2d(out_channels)
-        )
-
-        self.downsample = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=(1, 2), bias=False),
-            nn.BatchNorm2d(out_channels)
-        )
-
-        self.activation = nn.SiLU(inplace=True)
-
-    def forward(self, x):
-        identity = self.downsample(x)
-        out = self.block(x)
-        out = out + identity
-        out = self.activation(out)
-        return out
-
-
-class ConvBlock1(nn.Module):
-    """第一个卷积块（不下采样）"""
-
-    def __init__(self, in_channels, out_channels, dropout=0.3):
-        super().__init__()
-
-        self.block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=(1, 3), padding=(0, 1)),
-            nn.BatchNorm2d(out_channels),
-            nn.SiLU(inplace=True),
-            nn.Dropout2d(dropout),
-
-            nn.Conv2d(out_channels, out_channels, kernel_size=(1, 3), padding=(0, 1)),
-            nn.BatchNorm2d(out_channels),
-            nn.SiLU(inplace=True),
-            nn.Dropout2d(dropout),
-
-            nn.Conv2d(out_channels, out_channels, kernel_size=(1, 3), padding=(0, 1)),
-            nn.BatchNorm2d(out_channels)
-        )
-
-        self.downsample = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm2d(out_channels)
-        )
-
-        self.activation = nn.SiLU(inplace=True)
-
-    def forward(self, x):
-        identity = self.downsample(x)
-        out = self.block(x)
-        out = out + identity
-        out = self.activation(out)
-        return out
-
+# 因果卷积截断层 (保持原版时序因果性)
 class Chomp1d(nn.Module):
-    """裁剪模块，用于因果卷积"""
-
     def __init__(self, chomp_size):
-        super().__init__()
+        super(Chomp1d, self).__init__()
         self.chomp_size = chomp_size
 
     def forward(self, x):
         return x[:, :, :-self.chomp_size].contiguous()
 
+class InnerGroupedTemporalBlock(nn.Module):
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2, attention_type='none'):
+        super(InnerGroupedTemporalBlock, self).__init__()
 
-class TemporalBlock(nn.Module):
-    """TCN的基本时间块"""
+        self.groups = 20
 
-    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation,
-                 padding, dropout=0.5):
-        super().__init__()
+        self.conv1_group = nn.Conv1d(n_inputs, n_inputs, kernel_size,
+                                     stride=stride, padding=padding, dilation=dilation,
+                                     groups=self.groups, bias=False)
+        self.chomp1 = Chomp1d(padding) if padding > 0 else nn.Identity()
+        self.bn1_group = nn.BatchNorm1d(n_inputs)
+        self.relu1_group = nn.SiLU(inplace=True)
 
-        self.conv1 = nn.Conv1d(
-            n_inputs, n_outputs, kernel_size,
-            stride=stride, padding=padding, dilation=dilation
-        )
-        self.chomp1 = Chomp1d(padding)
-        self.relu1 = nn.ReLU()
+        self.conv1_pw = nn.Conv1d(n_inputs, n_outputs, 1, bias=False)
+        self.bn1_pw = nn.BatchNorm1d(n_outputs)
+        self.relu1_pw = nn.SiLU(inplace=True)
         self.dropout1 = nn.Dropout(dropout)
 
-        self.conv2 = nn.Conv1d(
-            n_outputs, n_outputs, kernel_size,
-            stride=stride, padding=padding, dilation=dilation
-        )
-        self.chomp2 = Chomp1d(padding)
-        self.relu2 = nn.ReLU()
+
+        self.conv2_group = nn.Conv1d(n_outputs, n_outputs, kernel_size,
+                                     stride=1, padding=padding, dilation=dilation,
+                                     groups=self.groups, bias=False)
+        self.chomp2 = Chomp1d(padding) if padding > 0 else nn.Identity()
+        self.bn2_group = nn.BatchNorm1d(n_outputs)
+        self.relu2_group = nn.SiLU(inplace=True)
+
+        self.conv2_pw = nn.Conv1d(n_outputs, n_outputs, 1, bias=False)
+        self.bn2_pw = nn.BatchNorm1d(n_outputs)
+        self.relu2_pw = nn.SiLU(inplace=True)
         self.dropout2 = nn.Dropout(dropout)
 
-        self.net = nn.Sequential(
-            self.conv1, self.chomp1, self.relu1, self.dropout1,
-            self.conv2, self.chomp2, self.relu2, self.dropout2
-        )
-
-        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
-        self.init_weights()
-
-    def init_weights(self):
-        self.conv1.weight.data.normal_(0, 0.01)
-        self.conv2.weight.data.normal_(0, 0.01)
-        if self.downsample is not None:
-            self.downsample.weight.data.normal_(0, 0.01)
+        # 残差对齐
+        self.downsample = nn.Sequential(
+            nn.Conv1d(n_inputs, n_outputs, 1, bias=False),
+            nn.BatchNorm1d(n_outputs)
+        ) if n_inputs != n_outputs else nn.Identity()
 
     def forward(self, x):
-        out = self.net(x)
-        res = x if self.downsample is None else self.downsample(x)
-        return F.relu(out + res)
+        res = self.downsample(x)
 
+        # 第一层前向传播
+        out = self.conv1_group(x)
+        out = self.chomp1(out)
+        out = self.bn1_group(out)
+        out = self.relu1_group(out)
+        out = self.conv1_pw(out)
+        out = self.bn1_pw(out)
+        out = self.relu1_pw(out)
+        out = self.dropout1(out)
 
-class TemporalConvNet(nn.Module):
-    """时序卷积网络"""
+        # 第二层前向传播
+        out = self.conv2_group(out)
+        out = self.chomp2(out)
+        out = self.bn2_group(out)
+        out = self.relu2_group(out)
+        out = self.conv2_pw(out)
+        out = self.bn2_pw(out)
+        out = self.relu2_pw(out)
+        out = self.dropout2(out)
 
-    def __init__(self, num_inputs, num_channels, kernel_size=3, dropout=0.5):
-        super().__init__()
+        return F.silu(out + res)
+
+class TemporalBlock(nn.Module):
+    def __init__(self, num_inputs, num_channels, kernel_size=3, dropout=0.2, attention_type='none'):
+        super(TemporalBlock, self).__init__()
         layers = []
         num_levels = len(num_channels)
 
@@ -141,12 +84,12 @@ class TemporalConvNet(nn.Module):
             in_channels = num_inputs if i == 0 else num_channels[i - 1]
             out_channels = num_channels[i]
 
-            layers.append(TemporalBlock(
-                in_channels, out_channels, kernel_size,
-                stride=1, dilation=dilation_size,
-                padding=(kernel_size - 1) * dilation_size,
-                dropout=dropout
-            ))
+            layers.append(
+                InnerGroupedTemporalBlock(
+                    in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
+                    padding=(kernel_size - 1) * dilation_size, dropout=dropout, attention_type=attention_type
+                )
+            )
 
         self.network = nn.Sequential(*layers)
 
