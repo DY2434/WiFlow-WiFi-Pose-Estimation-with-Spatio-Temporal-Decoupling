@@ -270,6 +270,12 @@ This project involves comparisons with several excellent open-source datasets an
 * **WPformer**: [https://github.com/pridy999/metafi_pose_estimation](https://github.com/pridy999/metafi_pose_estimation)
 * **HPE-Li**: [https://github.com/Toandinh1/HPE-Li-ECCV2024.git](https://github.com/Toandinh1/HPE-Li-ECCV2024.git)
 
+
+## Third Party Evaluation
+We are grateful to the third-party team (RuView) for providing the full forensic record, scripts, corruption masks, and a Rust port of our algorithm. These materials are publicly accessible at:
+https://github.com/ruvnet/RuView/tree/main/benchmarks/wiflow-std (see their RESULTS.md).
+
+
 ## License
 
 [Apache License 2.0]
