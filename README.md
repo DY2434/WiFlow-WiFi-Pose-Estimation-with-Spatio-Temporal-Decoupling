@@ -252,6 +252,17 @@ Trained models are automatically evaluated on the test set after training. Resul
 If you find our work or dataset useful in your research, please consider citing our paper:
 
 ```bibtex
+@INPROCEEDINGS{Dao2611:WiFlow,
+AUTHOR="Lankai Zhang and Yi Dao and Hao Liu and Haiwei Zhang and Wenbo Wang",
+TITLE="{WiFlow:} A Lightweight {WiFi-Based} Continuous Human Pose Estimation Network with {Spatio-Temporal} Feature Decoupling",
+BOOKTITLE="submitted to 2026 International Conference on Wireless Communications and Signal Processing (WCSP) (WCSP'26)",
+ADDRESS="Shenzhen, China",
+year={2026},
+}
+```
+
+For a longer version:
+```bibtex
 @misc{dao2026wiflowlightweightwifibasedcontinuous,
       title={WiFlow: A Lightweight WiFi-based Continuous Human Pose Estimation Network with Spatio-Temporal Feature Decoupling}, 
       author={Yi Dao and Lankai Zhang and Hao Liu and Haiwei Zhang and Wenbo Wang},
