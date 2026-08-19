@@ -253,7 +253,7 @@ If you find our work or dataset useful in your research, please consider citing 
 
 ```bibtex
 @INPROCEEDINGS{Dao2611:WiFlow,
-AUTHOR="Lankai Zhang and Yi Dao and Hao Liu and Haiwei Zhang and Wenbo Wang",
+AUTHOR="Yi Dao and Lankai Zhang and Hao Liu and Haiwei Zhang and Wenbo Wang",
 TITLE="{WiFlow:} A Lightweight {WiFi-Based} Continuous Human Pose Estimation Network with {Spatio-Temporal} Feature Decoupling",
 BOOKTITLE="submitted to 2026 International Conference on Wireless Communications and Signal Processing (WCSP) (WCSP'26)",
 ADDRESS="Shenzhen, China",
